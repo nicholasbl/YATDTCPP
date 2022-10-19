@@ -1,79 +1,194 @@
 [
     {
-        "name" : "argshxx",
-        "type" : "cmake",
-        "src"  : "https://github.com/Taywee/args/archive/refs/tags/6.2.7.tar.gz",
-        "options" : [
-            "ARGS_BUILD_EXAMPLE OFF",
-            "ARGS_BUILD_UNITTESTS OFF"
-        ]
-    },
-    {
-        "name" : "fmtlib",
-        "type" : "cmake",
-        "src"  : "https://github.com/fmtlib/fmt/archive/refs/tags/8.0.1.tar.gz",
-        "options" :  [
-            "FMT_TEST OFF",
-            "FMT_DOC OFF"
-        ]
-    },
-    {
         "name" : "boost",
         "type" : "boost",
-        "src"  : "https://boostorg.jfrog.io/artifactory/main/release/1.77.0/source/boost_1_77_0.tar.bz2",
+        "src"  : "https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2",
         "options" : [
-            "cxxflags=\"-std=c++11\""
-        ]
-    },
-    {
-        "name" : "tbb",
-        "type" : "cmake",
-        "src"  : "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.4.0.tar.gz",
-        "options" : [
-            "TBB_TEST OFF",
-            "TBB4PY_BUILD OFF",
-            "TBB_INSTALL_VARS ON"
-        ]
-    },
-    {
-        "name" : "cblosc",
-        "type" : "cmake",
-        "src" : "https://github.com/Blosc/c-blosc/archive/refs/tags/v1.21.1.tar.gz",
-        "options" : [
-            "BUILD_TESTS OFF",
-            "BUILD_FUZZERS OFF",
-            "BUILD_SHARED ON",
-            "BUILD_BENCHMARKS OFF"
-        ]
-    },
-    {
-        "name" : "zlib",
-        "type" : "cmake",
-        "src"  : "https://zlib.net/zlib-1.2.11.tar.gz",
-        "options" : [
-            "BUILD_SHARED_LIBS OFF"
+            "cxxflags=\"-std=c++11\"",
+            "link=static",
+            "--without-python"
         ]
     },
     {
         "name" : "zstd",
         "type" : "cmake",
-        "src" : "https://github.com/facebook/zstd/archive/refs/tags/v1.5.0.tar.gz",
+        "src"  : "https://github.com/facebook/zstd/archive/refs/tags/v1.5.2.tar.gz",
         "options" : [
-            "ZSTD_BUILD_PROGRAMS OFF",
-            "ZSTD_BUILD_TESTS OFF",
-            "ZSTD_BUILD_SHARED ON"
+            "ZSTD_BUILD_STATIC ON",
+            "ZSTD_BUILD_SHARED OFF",
+            "BUILD_TESTING OFF",
+            "ZSTD_BUILD_PROGRAMS OFF"
         ]
     },
     {
-        "name" : "openvdb",
+        "name" : "doctest",
         "type" : "cmake",
-        "src"  : "https://github.com/AcademySoftwareFoundation/openvdb/archive/refs/tags/v9.0.0.tar.gz",
+        "src"  : "https://github.com/doctest/doctest/archive/refs/tags/v2.4.9.tar.gz",
         "options" : [
-            "OPENVDB_SIMD SSE42",
-            "USE_BLOSC ON",
-            "USE_ZLIB ON",
-            "OPENVDB_CORE_SHARED ON",
-            "OPENVDB_BUILD_BINARIES OFF"
+            "DOCTEST_WITH_TESTS OFF"
         ]
+    },
+    {
+        "name" : "mimalloc",
+        "type" : "cmake",
+        "src"  : "https://github.com/microsoft/mimalloc/archive/refs/tags/v2.0.6.tar.gz",
+        "options" : [
+            "MI_OVERRIDE OFF",
+            "MI_BUILD_SHARED OFF",
+            "MI_BUILD_TESTS OFF",
+            "MI_INSTALL_TOPLEVEL ON"
+        ]
+    },
+    {
+        "name" : "mpark_variant",
+        "type" : "cmake",
+        "src"  : "https://github.com/mpark/variant/archive/refs/heads/master.zip",
+        "options" : [
+        ]
+    },
+    {
+        "name" : "ktx",
+        "type" : "cmake",
+        "src"  : "https://github.com/KhronosGroup/KTX-Software/archive/refs/tags/v4.0.0.tar.gz",
+        "options" : [
+            "KTX_FEATURE_STATIC_LIBRARY:BOOL ON",
+            "KTX_FEATURE_TESTS OFF"
+        ],
+        "options+arm64" : [
+            "BASISU_SUPPORT_SSE OFF"
+        ],
+        "notes" : "We keep the tools on for handy access to toktx. turn KTX_FEATURE_TOOLS:BOOL OFF to disable them."
+    },
+    {
+        "name" : "assimp",
+        "type" : "cmake",
+        "src"  : "https://github.com/assimp/assimp/archive/refs/tags/v5.2.4.tar.gz",
+        "options" :  [
+            "BUILD_SHARED_LIBS:BOOL OFF",
+            "ASSIMP_BUILD_ASSIMP_TOOLS:BOOL OFF",
+            "ASSIMP_BUILD_TESTS:BOOL OFF",
+            "ASSIMP_INJECT_DEBUG_POSTFIX:BOOL OFF",
+            "ASSIMP_BUILD_MINIZIP 1"
+        ]
+    },
+    {
+        "name" : "glfw",
+        "type" : "cmake",
+        "src"  : "https://github.com/glfw/glfw/archive/refs/tags/3.3.8.tar.gz",
+        "options" : [
+            "GLFW_BUILD_TESTS OFF",
+            "GLFW_BUILD_EXAMPLES OFF",
+            "GLFW_BULID_DOCS OFF"
+        ]
+    },
+    {
+        "name" : "spdlog",
+        "type" : "cmake",
+        "src"  : "https://github.com/gabime/spdlog/archive/refs/tags/v1.10.0.tar.gz",
+        "options" : [
+            "SPDLOG_INSTALL ON"
+        ]
+    },
+    {
+        "name" : "cxxopts",
+        "type" : "cmake",
+        "src" : "https://github.com/jarro2783/cxxopts/archive/refs/tags/v3.0.0.tar.gz",
+        "options" : [
+            "CXXOPTS_BUILD_EXAMPLES OFF",
+            "CXXOPTS_BUILD_TESTS OFF"
+        ]
+    },
+    {
+        "name" : "magic_enum",
+        "type" : "cmake",
+        "src"  : "https://github.com/Neargye/magic_enum/archive/refs/tags/v0.8.1.tar.gz",
+        "options" : [
+            "MAGIC_ENUM_OPT_INSTALL ON",
+            "MAGIC_ENUM_OPT_BUILD_EXAMPLES OFF",
+            "MAGIC_ENUM_OPT_BUILD_TESTS OFF"
+        ]
+    },
+    {
+        "name" : "spsc_queue",
+        "type" : "cmake",
+        "src"  : "https://github.com/cameron314/readerwriterqueue/archive/refs/tags/v1.0.6.tar.gz"
+    },
+    {
+        "name" : "mpmc_queue",
+        "type" : "cmake",
+        "src"  : "https://github.com/cameron314/concurrentqueue/archive/refs/tags/v1.0.3.tar.gz"
+    },
+    {
+        "name" : "vma",
+        "type" : "header",
+        "src"  : "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.0.1.tar.gz",
+        "interface" : "VulkanMemoryAllocator-3.0.1/include"
+    },
+    {
+        "name" : "stblib",
+        "type" : "header",
+        "src"  : "https://github.com/nothings/stb/archive/3a1174060a7dd4eb652d4e6854bc4cd98c159200.zip",
+        "interface" : "stb-3a1174060a7dd4eb652d4e6854bc4cd98c159200"
+    },
+    {
+        "name" : "openssl",
+        "type" : "config/make",
+        "src"  : "https://github.com/openssl/openssl/archive/refs/tags/openssl-3.0.5.tar.gz",
+        "options" : [
+            "no-ui-console",
+            "no-shared"
+        ],
+        "target" : "build_sw"
+    },
+    {
+        "name" : "uri_p",
+        "type" : "cmake",
+        "src"  : "https://github.com/uriparser/uriparser/releases/download/uriparser-0.9.6/uriparser-0.9.6.tar.gz",
+        "options" : [
+            "BUILD_SHARED_LIBS OFF",
+            "URIPARSER_BUILD_DOCS OFF",
+            "URIPARSER_BUILD_TESTS OFF",
+            "URIPARSER_BUILD_TOOLS OFF",
+            "URIPARSER_BUILD_WCHAR_T OFF"
+        ]
+    },
+    {
+        "name" : "taskflow",
+        "type" : "cmake",
+        "src"  : "https://github.com/taskflow/taskflow/archive/refs/tags/v3.4.0.tar.gz",
+        "options" : [
+            "TF_BUILD_TESTS OFF",
+            "TF_BUILD_EXAMPLES OFF"
+        ]
+    },
+    {
+        "name" : "absl",
+        "type" : "cmake",
+        "src"  : "https://github.com/abseil/abseil-cpp/archive/refs/tags/20220623.0.tar.gz",
+        "options" : [
+            "ABSL_ENABLE_INSTALL ON",
+            "CMAKE_CXX_STANDARD 11"
+        ]
+    },
+    {
+        "name" : "spirv_reflect",
+        "type" : "cmake",
+        "src"  : "https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/sdk-1.3.224.0.tar.gz",
+        "options" : [
+            "SPIRV_REFLECT_EXECUTABLE OFF",
+            "SPIRV_REFLECT_EXAMPLES OFF",
+            "SPIRV_REFLECT_STATIC_LIB ON"
+        ]
+    },
+    {
+        "name" : "spirv_reflect_header",
+        "type" : "header",
+        "src"  : "https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/sdk-1.3.224.0.tar.gz",
+        "interface" : "SPIRV-Reflect-sdk-1.3.224.0"
+    },
+    {
+        "name" : "meshopt",
+        "type" : "cmake",
+        "src"  : "https://github.com/zeux/meshoptimizer/archive/refs/tags/v0.18.tar.gz"
     }
 ]

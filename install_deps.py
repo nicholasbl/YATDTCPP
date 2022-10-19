@@ -1,10 +1,118 @@
 #!/usr/bin/env python3
 
+'''
+This script consumes a list of dependencies (deps.txt or deps.json) that is in
+the same directory as this script. The deps will be built and installed in a
+`third_party` directory, that has a ./bin, ./lib, ./include, etc. Downloaded
+archives are stored in a `third_party_cache` directory for reuse if need be.
+
+== File formats
+Deps can be specified in a quick text format or json.
+
+=== Text
+An example in text:
+```
+# This is a comment
+- awesome_library
+type : cmake
+src : https://url/to/some.tar.bz2
+options :
+    CMAKE_OPTION_ONE ON
+    CMAKE_OPTION_TWO OFF
+
+- awesome_library2
+...
+
+```
+An entry in text format starts with a dash and the name you want to use to refer
+to the package. It is followed by attributes which start with a key, followed
+by a colon, then followed by content. To make an attribute with list content,
+leave a blank on the key line, and follow it with list value lines that start
+with a tab or some kind of white space.
+
+Comments start the line with a `#`.
+
+=== JSON
+While harder to write, this script also consumes JSON.
+
+An example in json:
+
+```json
+[
+    {
+        "name" : "awesome_library",
+        "type" : "cmake",
+        "src"  : "https://url/to/some.tar.bz2",
+        "options" : [
+            "CMAKE_OPTION_ONE ON",
+            "CMAKE_OPTION_TWO OFF"
+        ]
+    },
+    ...
+```
+
+== Deps and Drivers
+
+To build a package the script needs to know how to tackle the build job; this
+is specified in a driver.
+
+=== Common driver attributes
+- name (json required, - for text): a name for a package; anything can be put here as long as it is unique.
+- type (required): the driver to use for the package
+- src (required): url where to download the package
+- options (optional): a list of configuration options to pass to the package, interpreted in a driver specific way
+- options+flag1+flag2 (optional): options that should only be passed on certain architectures or platforms
+
+=== Flags
+System flags are determined by the python platform:
+    platform.machine(), platform.system().lower()
+
+=== CMake driver (type: cmake)
+For any package that has a CMakeLists.txt. Tries to find a CMakeLists.txt that
+has the shortest path in the package, configures and compiles in release mode.
+Has no other special flags at this time.
+
+=== Boost driver (type: boost)
+Used for a package that uses bjam (like boost). Note that this is pretty rough
+and likely only works for boost itself, thus the limited driver name.
+
+=== Make driver (type: config/make)
+Use for packages that use a configure script + make. By default the script
+assumes that configure is in the root of the archive.
+Options are passed to the configure script as is.
+
+This driver will try to make the target 'all', a custom make target can be
+defined with the "target" attribute:
+`target : build_sw`
+
+=== Header-only library driver (type: header)
+This driver does a simple copy and paste of files, thus the `options` attribute
+doesnt have much meaning.
+
+This driver, however, does require the `interface` attribute which is an archive
+relative path to the directory you wish to copy out. The destination will be
+`./third_party/include/package_name`.
+
+== Attribution Support
+Packages are scanned for a licence text file; if found, they are collected and
+written to `third_party/include/attribution.h` as a constant for inclusion in
+your source.
+
+== Build Failures
+
+If the build fails, a log will be created to help you debug the issue. Once the
+dep file has been updated, simply re-run the script to build the problematic
+package(s).
+
+'''
+
+
 import argparse
 import datetime
 import json
 import subprocess
 import os
+import re
 import glob
 import urllib.request
 import urllib.parse
@@ -13,7 +121,6 @@ import shutil
 import io
 import zlib
 import multiprocessing
-from multiprocessing import Process
 
 if __name__ != "__main__":
     print("Not intended to be included as a module")
@@ -49,6 +156,108 @@ def root_path(p):
     return os.path.join(root, p)
 
 
+class DepFileParser:
+    def __init__(self):
+        self.all = []
+        self.current = {}
+
+        self.lines = []
+        self.line_no = 1
+
+    def has_line(self):
+        return len(self.lines)
+
+    def curr_line(self):
+        return self.lines[0]
+
+    def take_line(self):
+        ret = self.lines[0]
+        self.lines = self.lines[1:]
+        self.line_no += 1
+        return ret
+
+    def flush(self):
+        if len(self.current):
+            self.all += [self.current]
+        self.current = {}
+
+    def handle_attrib(self):
+        line = self.take_line()
+
+        try:
+            place = line.index(':')
+            parts = [ i.strip() for i in [line[:place], line[place+1:]] ]
+            parts = [ i for i in parts if len(i)]
+
+            attrib_name = parts[0]
+
+            content_arr = []
+
+            is_array = True
+
+            if len(parts) > 1:
+                is_array = False
+                content_arr.append(parts[1])
+
+            #check next line to see if its a continuation
+            while self.has_line():
+                nextl = self.curr_line()
+                if not re.match(r'\s', nextl):
+                    break
+
+                if not len(nextl.strip()):
+                    break
+                content_arr.append(nextl.strip())
+                self.take_line()
+
+            # no more content
+            if not is_array:
+                assert(len(content_arr) == 1)
+                content_arr = content_arr[0]
+
+            self.current[attrib_name] = content_arr
+
+            #print("ATTRIB:", attrib_name, self.current[attrib_name])
+
+        except:
+            err_at = f"Malformed attribute line: {self.line_no} {line}"
+            raise Exception(err_at)
+
+    def handle_line(self):
+        if not self.has_line(): return
+
+        line = self.curr_line()
+
+        if not len(line.strip()):
+            self.take_line()
+            return
+
+        if line.startswith('#'):
+            self.take_line()
+            return
+
+        if line.startswith('-'):
+            self.flush();
+            parts = line[1:].split()
+            assert(len(parts) >= 1)
+            self.current["name"] = parts[0]
+            self.take_line()
+            #print("header", self.current_name)
+            return
+
+        self.handle_attrib()
+
+
+    def parse(self, p):
+        with open(p) as raw_file:
+            self.lines = raw_file.readlines()
+
+        while self.has_line():
+            self.handle_line()
+        self.flush()
+
+        return self.all
+
 # The root third party directory
 thirdparty_dir = root_path("third_party")
 
@@ -70,11 +279,26 @@ if not os.path.exists(thirdparty_cache_dir):
     os.mkdir(thirdparty_cache_dir)
 
 # Try to load the package list
+sources = None
 try:
-    sources = json.load(open(root_path("deps.json")))
+    dep_source_parser = DepFileParser()
+    sources = dep_source_parser.parse(root_path("deps.txt"))
 except Exception:
-    print("Unable to read json!")
-    raise
+    print("Unable to read deps.txt, looking for json...")
+    try:
+        sources = json.load(open(root_path("deps.json")))
+    except Exception:
+        print("Unable to read json!")
+        raise
+
+# regularize how we use package options; they HAVE to be lists.
+
+for value in sources:
+    for key in value:
+        if not key.startswith('options'):
+            continue
+        #force this to a list...
+        value[key] = list(value[key])
 
 # Filter based on the user's selection, if there is one
 if args.package:
@@ -99,20 +323,19 @@ def flags_apply(sys_flags, opt_flags):
     must_have = set(must_have)
     must_not_have = set(must_not_have)
 
-    # print(sys_flags, must_have, must_not_have)
-
     return must_not_have.isdisjoint(sys_flags) and \
-        must_have.issubset(must_have)
+        must_have.issubset(sys_flags)
 
+print("This platform has flags:", ",".join(set([platform.machine(), platform.system().lower()])))
 
 def compute_options(node):
-    this_system = set([platform.machine, platform.system().lower()])
+    this_system = set([platform.machine(), platform.system().lower()])
     keys = [k for k in node if k.startswith("options")]
 
     valid_opts = []
 
     for key in keys:
-        parts = key.split(':')[1:]
+        parts = key.split('+')[1:]
         these_opts = node[key]
         if flags_apply(this_system, parts):
             valid_opts += these_opts
@@ -145,6 +368,9 @@ class Source:
 
         if self.type == PKGType_HEADER_ONLY:
             self.interface = source["interface"]
+
+        if self.type == PKGType_CONFIGURE and 'target' in source:
+            self.target = source['target']
 
         # for attr in dir(self):
         #     print(f"PKG {attr} = {getattr(self, attr)}")
@@ -214,16 +440,27 @@ def is_installed(s: Source):
     return False
 
 
-def find_shortest_path_to(dir, pattern):
-    n = dir+"/**/"+pattern.upper()
+def find_shortest_path_to(dir, pattern, exclude=None):
+    n = dir+"/**/"+pattern
 
     pl = glob.glob(n, recursive=True)
+
+    n = dir+"/**/"+pattern.upper()
+
+    pl += glob.glob(n, recursive=True)
 
     n = dir+"/**/"+pattern.lower()
 
     pl += glob.glob(n, recursive=True)
 
-    pl.sort(key=lambda x: x.split(os.pathsep))
+    if isinstance(exclude, str):
+        pl = [p for p in pl if exclude not in p]
+
+    if isinstance(exclude, list):
+        for l in exclude:
+            pl = [p for p in pl if l not in p]
+
+    pl.sort(key=lambda x: len(x.split(os.pathsep)))
     return pl[0]
 
 
@@ -238,9 +475,11 @@ def get_log_file(s: Source, prefix):
 def run_subproc(s: Source, args, cwd=None):
     if not cwd:
         cwd = os.getcwd()
+    print("Running", cwd, " ".join(args))
     subprocess.run(args,
                    check=True,
                    cwd=cwd,
+                   env=os.environ.copy(),
                    stdout=s.logfile,
                    stderr=s.logfile)
 
@@ -275,9 +514,10 @@ def cmake_strategy(source: Source):
         ("CMAKE_INSTALL_PREFIX", thirdparty_dir),
         ("CMAKE_PREFIX_PATH", thirdparty_dir),
         ("CMAKE_SYSTEM_PREFIX_PATH", thirdparty_dir),
-        ("CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH", "FALSE"),
-        ("CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY", "TRUE"),
-        ("CMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY", "TRUE"),
+        # ("CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH", "FALSE"),
+        # ("CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY", "TRUE"),
+        # ("CMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY", "TRUE"),
+        ("CMAKE_POSITION_INDEPENDENT_CODE", "ON"),
         ("CMAKE_FIND_ROOT_PATH", thirdparty_dir),
         ("CMAKE_BUILD_TYPE", "Release"),
     ]
@@ -327,7 +567,10 @@ def header_only_strategy(s: Source):
 # Configure/Make handler ======================================================
 
 def find_configure_script(dir):
-    return find_shortest_path_to(dir, "configure")
+    try:
+        return find_shortest_path_to(dir, "configure")
+    except Exception:
+        return find_shortest_path_to(dir, "Configure")
 
 
 def configmake_driver(s: Source, cscript, cscriptdir):
@@ -335,31 +578,41 @@ def configmake_driver(s: Source, cscript, cscriptdir):
         "--prefix=" + thirdparty_dir
     ]
 
-    print("Running", " ".join(cscript + opt_list))
+    args = ['./' + cscript] + opt_list + s.opts
 
-    run_subproc(source, cscript + opt_list, cscriptdir)
+    print("Running", " ".join(args))
+
+    run_subproc(s, args, cscriptdir)
 
     print("Configured. Building...")
 
+    target = "all"
+
+    try:
+        target = s.target
+    except Exception:
+        pass
+
     opt_list = [
-        "-j" + str(multiprocessing.cpu_count())
+        "-j" + str(multiprocessing.cpu_count()),
+        target
     ]
 
-    run_subproc(source, ["make"] + opt_list, cscriptdir)
-    run_subproc(source, ["make", "install"], cscriptdir)
+    run_subproc(s, ["make"] + opt_list, cscriptdir)
+    run_subproc(s, ["make", "install"], cscriptdir)
 
 
 def configmake_strategy(s: Source):
     try:
-        cscript = find_configure_script(s.package_unpack_dir)
-        cscriptdir = os.path.dirname(cscript)
+        cscript_raw = find_configure_script(s.package_unpack_dir)
+        cscript = os.path.basename(cscript_raw)
+        cscriptdir = os.path.dirname(cscript_raw)
+        print("Using config script:", cscript_raw)
     except Exception:
         print("Unable to find a valid configure script!")
         raise
 
-    p = Process(target=configmake_driver, args=(s, cscript, cscriptdir, ))
-    p.start()
-    p.join()
+    configmake_driver(s, cscript, cscriptdir)
 
 # BJAM handler ===============================================================
 
@@ -422,7 +675,10 @@ inline constexpr const char* attribution = R"(
 
 def find_write_attribution(pkg):
     try:
-        licfile = find_shortest_path_to(pkg.package_unpack_dir, "licen?e*")
+        licfile = find_shortest_path_to(pkg.package_unpack_dir,
+                                        "licen?e*",
+                                        [".hpp", ".h", ".cpp"]
+                                        )
 
         print("Found license file at", licfile)
 
@@ -459,7 +715,7 @@ for source in sources:
     os.makedirs(pkg.package_unpack_dir, exist_ok=True)
     os.makedirs(pkg.package_build_dir, exist_ok=True)
     os.makedirs(pkg.package_log_dir, exist_ok=True)
-    
+
     pkg.create_log()
 
     # check if we have it in cache
